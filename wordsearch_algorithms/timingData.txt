@@ -1,0 +1,15 @@
+grid: data/input15.txt  wordList: data/wordlist2.txt    sortMechanism: 1        timingData: Sort Time: 224.457 Search Time: 0.0029319 Total Time: 224.46 
+grid: data/input30.txt  wordList: data/wordlist2.txt    sortMechanism: 1        timingData: Sort Time: 224.493 Search Time: 0.00557742 Total Time: 224.499 
+grid: data/input250.txt wordList: data/wordlist2.txt    sortMechanism: 1        timingData: Sort Time: 221.45 Search Time: 0.116006 Total Time: 221.566 
+grid: data/input15.txt  wordList: data/wordlist2.txt    sortMechanism: 2        timingData: Sort Time: 0.100246 Search Time: 0.00116023 Total Time: 0.101406 
+grid: data/input30.txt  wordList: data/wordlist2.txt    sortMechanism: 2        timingData: Sort Time: 0.100287 Search Time: 0.00239302 Total Time: 0.102681 
+grid: data/input250.txt wordList: data/wordlist2.txt    sortMechanism: 2        timingData: Sort Time: 0.100391 Search Time: 0.106064 Total Time: 0.206455 
+grid: data/input15.txt  wordList: data/wordlist2.txt    sortMechanism: 3        timingData: Sort Time: 0.395796 Search Time: 0.000613553 Total Time: 0.396409 
+grid: data/input30.txt  wordList: data/wordlist2.txt    sortMechanism: 3        timingData: Sort Time: 0.399265 Search Time: 0.00169719 Total Time: 0.400962 
+grid: data/input250.txt wordList: data/wordlist2.txt    sortMechanism: 3        timingData: Sort Time: 0.395506 Search Time: 0.0760644 Total Time: 0.471571 
+grid: data/input15.txt  wordList: data/wordlist2.txt    sortMechanism: 5        timingData: Sort Time: 1.4775e-05 Search Time: 0.00143952 Total Time: 0.00145429 
+grid: data/input30.txt  wordList: data/wordlist2.txt    sortMechanism: 5        timingData: Sort Time: 1.0282e-05 Search Time: 0.00568772 Total Time: 0.005698 
+grid: data/input250.txt wordList: data/wordlist2.txt    sortMechanism: 5        timingData: Sort Time: 1.0311e-05 Search Time: 1.96539 Total Time: 1.9654 
+grid: data/input15.txt  wordList: data/wordlist2.txt    sortMechanism: 6        timingData: Sort Time: 0.147001 Search Time: 0.000874977 Total Time: 0.147876 
+grid: data/input30.txt  wordList: data/wordlist2.txt    sortMechanism: 6        timingData: Sort Time: 0.146137 Search Time: 0.00240152 Total Time: 0.148539 
+grid: data/input250.txt wordList: data/wordlist2.txt    sortMechanism: 6        timingData: Sort Time: 0.146145 Search Time: 0.10609 Total Time: 0.252235

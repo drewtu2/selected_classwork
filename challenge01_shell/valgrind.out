@@ -1,0 +1,84 @@
+==8176== Syscall param execve(argv) points to uninitialised byte(s)
+==8176==    at 0x1002F88FA: execve (in /usr/lib/system/libsystem_kernel.dylib)
+==8176==    by 0x1001CF23E: execvPe (in /usr/lib/system/libsystem_c.dylib)
+==8176==    by 0x1001CEFBE: execvp (in /usr/lib/system/libsystem_c.dylib)
+==8176==    by 0x100002398: execute_base (nush.c:457)
+==8176==    by 0x100001C48: execute (nush.c:126)
+==8176==    by 0x1000019D4: main (nush.c:45)
+==8176==  Address 0x100a835f0 is 16 bytes inside a block of size 2,048 alloc'd
+==8176==    at 0x10000C681: malloc (in /usr/local/Cellar/valgrind/3.13.0/lib/valgrind/vgpreload_memcheck-amd64-darwin.so)
+==8176==    by 0x1000013F1: svec_make (svec.c:21)
+==8176==    by 0x10000192B: main (nush.c:29)
+==8176== 
+==8175== 64 bytes in 1 blocks are definitely lost in loss record 37 of 73
+==8175==    at 0x10000CD7F: calloc (in /usr/local/Cellar/valgrind/3.13.0/lib/valgrind/vgpreload_memcheck-amd64-darwin.so)
+==8175==    by 0x1004F2231: NXMapGet (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F22E9: copySwiftV1MangledName(char const*, bool) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F0CE9: _read_images (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004EF5DA: map_images_nolock (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x100501C6C: batchFinalizeOnTwoThreads(_malloc_zone_t*, void (*)(auto_zone_cursor*, void (*)(void*, void*), void*), auto_zone_cursor*, unsigned long) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x7FFF5FC047CF: dyld::notifyBatchPartial(dyld_image_states, bool, char const* (*)(dyld_image_states, unsigned int, dyld_image_info const*)) (in /usr/lib/dyld)
+==8175==    by 0x7FFF5FC04516: dyld::registerImageStateBatchChangeHandler(dyld_image_states, char const* (*)(dyld_image_states, unsigned int, dyld_image_info const*)) (in /usr/lib/dyld)
+==8175==    by 0x10014C89D: dyld_register_image_state_change_handler (in /usr/lib/system/libdyld.dylib)
+==8175==    by 0x1004EE07B: _objc_init (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1000F4C93: _os_object_init (in /usr/lib/system/libdispatch.dylib)
+==8175==    by 0x1000F4C7F: libdispatch_init (in /usr/lib/system/libdispatch.dylib)
+==8175== 
+==8175== 64 bytes in 1 blocks are definitely lost in loss record 38 of 73
+==8175==    at 0x10000CD7F: calloc (in /usr/local/Cellar/valgrind/3.13.0/lib/valgrind/vgpreload_memcheck-amd64-darwin.so)
+==8175==    by 0x1004F2231: NXMapGet (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F2300: copySwiftV1MangledName(char const*, bool) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F22E9: copySwiftV1MangledName(char const*, bool) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F0CE9: _read_images (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004EF5DA: map_images_nolock (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x100501C6C: batchFinalizeOnTwoThreads(_malloc_zone_t*, void (*)(auto_zone_cursor*, void (*)(void*, void*), void*), auto_zone_cursor*, unsigned long) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x7FFF5FC047CF: dyld::notifyBatchPartial(dyld_image_states, bool, char const* (*)(dyld_image_states, unsigned int, dyld_image_info const*)) (in /usr/lib/dyld)
+==8175==    by 0x7FFF5FC04516: dyld::registerImageStateBatchChangeHandler(dyld_image_states, char const* (*)(dyld_image_states, unsigned int, dyld_image_info const*)) (in /usr/lib/dyld)
+==8175==    by 0x10014C89D: dyld_register_image_state_change_handler (in /usr/lib/system/libdyld.dylib)
+==8175==    by 0x1004EE07B: _objc_init (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1000F4C93: _os_object_init (in /usr/lib/system/libdispatch.dylib)
+==8175== 
+==8175== 256 bytes in 1 blocks are definitely lost in loss record 53 of 73
+==8175==    at 0x10000C681: malloc (in /usr/local/Cellar/valgrind/3.13.0/lib/valgrind/vgpreload_memcheck-amd64-darwin.so)
+==8175==    by 0x10000257D: firstWord (tokens.c:32)
+==8175==    by 0x10000252B: tokenize (tokens.c:19)
+==8175==    by 0x1000019C8: main (nush.c:44)
+==8175== 
+==8175== 1,664 bytes in 26 blocks are definitely lost in loss record 65 of 73
+==8175==    at 0x10000CD7F: calloc (in /usr/local/Cellar/valgrind/3.13.0/lib/valgrind/vgpreload_memcheck-amd64-darwin.so)
+==8175==    by 0x1004F2231: NXMapGet (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F2300: copySwiftV1MangledName(char const*, bool) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F0CE9: _read_images (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004EF5DA: map_images_nolock (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x100501C6C: batchFinalizeOnTwoThreads(_malloc_zone_t*, void (*)(auto_zone_cursor*, void (*)(void*, void*), void*), auto_zone_cursor*, unsigned long) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x7FFF5FC047CF: dyld::notifyBatchPartial(dyld_image_states, bool, char const* (*)(dyld_image_states, unsigned int, dyld_image_info const*)) (in /usr/lib/dyld)
+==8175==    by 0x7FFF5FC04516: dyld::registerImageStateBatchChangeHandler(dyld_image_states, char const* (*)(dyld_image_states, unsigned int, dyld_image_info const*)) (in /usr/lib/dyld)
+==8175==    by 0x10014C89D: dyld_register_image_state_change_handler (in /usr/lib/system/libdyld.dylib)
+==8175==    by 0x1004EE07B: _objc_init (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1000F4C93: _os_object_init (in /usr/lib/system/libdispatch.dylib)
+==8175==    by 0x1000F4C7F: libdispatch_init (in /usr/lib/system/libdispatch.dylib)
+==8175== 
+==8175== 2,059 (2,048 direct, 11 indirect) bytes in 1 blocks are definitely lost in loss record 67 of 73
+==8175==    at 0x10000C681: malloc (in /usr/local/Cellar/valgrind/3.13.0/lib/valgrind/vgpreload_memcheck-amd64-darwin.so)
+==8175==    by 0x1000013F1: svec_make (svec.c:21)
+==8175==    by 0x10000192B: main (nush.c:29)
+==8175== 
+==8175== 2,064 bytes in 1 blocks are possibly lost in loss record 69 of 73
+==8175==    at 0x10000C942: malloc_zone_malloc (in /usr/local/Cellar/valgrind/3.13.0/lib/valgrind/vgpreload_memcheck-amd64-darwin.so)
+==8175==    by 0x1004FEEFD: _objc_copyClassNamesForImage (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F2182: protocols() (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F2093: readClass(objc_class*, bool, bool) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004EFC13: gc_init (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F724E: objc_initializeClassPair_internal(objc_class*, char const*, objc_class*, objc_class*) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x100504132: layout_string_create (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F283C: realizeClass(objc_class*) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F2300: copySwiftV1MangledName(char const*, bool) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F22E9: copySwiftV1MangledName(char const*, bool) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F22E9: copySwiftV1MangledName(char const*, bool) (in /usr/lib/libobjc.A.dylib)
+==8175==    by 0x1004F22E9: copySwiftV1MangledName(char const*, bool) (in /usr/lib/libobjc.A.dylib)
+==8175== 
+==8175== 2,064 (16 direct, 2,048 indirect) bytes in 1 blocks are definitely lost in loss record 70 of 73
+==8175==    at 0x10000C681: malloc (in /usr/local/Cellar/valgrind/3.13.0/lib/valgrind/vgpreload_memcheck-amd64-darwin.so)
+==8175==    by 0x1000013C9: svec_make (svec.c:18)
+==8175==    by 0x1000019F3: main (nush.c:49)
+==8175== 

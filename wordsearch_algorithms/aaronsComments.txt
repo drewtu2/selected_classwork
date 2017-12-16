@@ -1,0 +1,16 @@
+# Aaron's Comments
+1. Comment the header files -> offers an overview to a given class
+2. Using pointers in class instead of actually storing the object makes improves 
+perforamnce (no copy) but makes the code slightly more complicated to understand. 
+Higher chance of bugs...
+3. Use the "m_" notation for member variables.
+4. Don't "over-engineer" -> in this case, there really isn't a need to make the 
+variables pointers... implies the allocated space will be used again in the 
+future outside of the creating class. Further clarified when we realize its 
+deleted in the destructor. BUT - its very easy to forget to delete, resulting in 
+memory leaks. Another reason there isn't really a need to allocate on the heap is
+that this is the overarching class...
+5. Reduce copied code -> opt to use more if-else blocks selecting which "difference" 
+code to use, keeping more common code (use flags). If we get to more than ~5 input variables,
+opt to create a config struct instead of passing things individually...
+6. 

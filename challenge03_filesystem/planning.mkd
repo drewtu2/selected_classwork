@@ -1,0 +1,1429 @@
+# Building a File System
+
+## Lesser issues ##
+- Check consistency and edge cases of inode size tracking
+## Known Issues ##
+- reading/writing to large files.
+- reading/writing to large files.
+## Untested
+- nufs_truncate
+- nufs_chmod
+
+
+## Solved
+- nufs_utimens
+- nufs_unlink --- seems to be a problem with `directory_delete_entry`. consequently, nufs_rmdir will also likely have issues.
+- need to ensure hard links is working properly.
+- nufs_rename --- no cluueeee why this is broken
+- directory inode size tracking
+- Currently directories don't know how many files are stored in them. may not even
+own the files that they should own. Check this logic. the "can overwrite" is susp.
+- nufs_rename --- no cluueeee why this is broken
+- nufs_unlink --- seems to be a problem with `directory_delete_entry`. consequently, nufs_rmdir will also likely have issues.
+
+- need to ensure hard links is working properly.
+- Rewrote directory_insert_entry. Now
+When an entry is added into a directory, two entries seem to actually be written
+to the block (the count is only incremented once though). Not sure why this happens
+but there are a couple places that might cause it. I'd start by checking the logic
+in `directory_put_ent`. Other places that might be sus are the functions that
+give the page index based on the bitmaps... You can observe this behavior by
+adding more than 2 files to the mount directory and ls'ing (i.e. just keep adding
+files and listing, you'll see the bad behavior)
+
+- after re-writing directory_insert_entry to fix duplicate entries issue, now unable to return inode id of the newly inserted direntry inode. This used to work before, but after checking the man 2 page for mknode I'm unsure why as it should return 0 on success. Currently this causes problems upstream for nufs_mknode, which was dependent on the return of the inode id.
+
+- Sizes aren't updated in (any?) of the files? Need to add logic to update the
+sizes of inodes as we add more files/as we add more data to them... pretty sure
+we don't do this at all. places include in `direntry_put_ent` and wherever we write
+to a file maybe?
+
+- Can't load the previous state from the mount file.
+This maybe be because of a host of reasons BUT one thing that definitely needs to
+be fixed is when the root directory is initialized. The initialization sets the
+number of entries to 0 meaning we "lose" the knowledge of any files that existed
+in the directory on load. This is one KNOWN issue. There are other issues like
+this that might also exist.
+
+- reading files just flat out doesn't work. causes some sort of memory corruption
+
+'''
+## Filesystem
+------------------------------------------------------------------
+| Super Block |               Data Blocks (4k chunks)             |
+------------------------------------------------------------------
+
+## Super Block (myDisk)
+---------------------------------------------------------------------------------
+| Root Inode | Bitmap Inodes | Bitmap DataBlocks | Inodes | Pointer to DataBlocks|
+---------------------------------------------------------------------------------
+SuperBlock.root       = inode of root directory
+SuperBlock.inodes[0]  = inode of the root directory
+DataBlock[0]          = root directory.
+'''
+
+Maximum number of inodes/datapages:
+- prepare for worst case overhead scenario. 1 inode per datablock.
+- num inodes/blocks = x
+`
+sizeof(superblock) + sizeof(PAGE)*x + sizeof(inode)*x + (2*x)/8 = 1MB
+initialize all inodes in storage.c
+initialize bitmaps in storage.c
+`
+
+group id: getgid()
+user id:getuid()
+TODO: *SEE direntry_next_free for information regarding a necessary overhaul of code...*
+
+## IMPORANT ##
+~ - need to create the inode for the root directory ~
+~ - directories should have the mode set to 040755 ~
+~ - file should also have a mode 0100644 ~
+_Created constants for ths in constants.h_
+
+
+
+
+# Questions for Nat
+1. according to man 2 pages for nufs access, we need to return 0 or -1 and then
+set global value of errno for errors but it looks like getattr returns the errno
+instead of setting errno. Which do we do? return the -ERRNO
+2. Style for init fx's vs make fx's, return ptr or set ptr?
+3. Calculating max # of inodes, pages, and directory depth - confirm we did this correctly
+
+_rewrite the super block to use an int offset and int index notation rather than a pointer_...
+stick w/ init style over the make style... init style pass in where the structure
+will live and create from that memory address vs make which needs to malloc
+store name in node
+
+
+## Basic questions (not for Nat):
+- dev\_t the same for every inode?
+- effective user id or uid?
+- should we create a separate file struct as we did for directories?
+  - It would just be a normal page since the data is unstructured.
+- Does every data page pointed to by a single inode need to have a dir struct at the beginning
+
+
+
+## PATH Names
+Problem: Given a path name, how do you differentiate if the path points to a file
+or a directory?
+A: You don't care... Everything in the file system is a file.... Directories are
+just special files whose data is in a directory format.... Therefore, you would
+know if it s a directory or a data file based on a flag set in the inode at creation
+time...
+
+
+*NAMING CONVENTION*
+- `<RETURN TYPE> <STRUCT_NAME>_<FUNCTION_NAME>`
+slash is an escape character used in markdown... (underscore has special meaning in markdown)
+the actual function names don't have the slash, just have the underscore
+
+## Step 1
+Basic outlines on how to achieve this task
+
+### Create file
+`void file_make(path)`
+- go through the list of inodes to find the next free inode. set it's mode to a file.
+- create an entry and put it in the current directory (filename, inode).
+
+### List the files in the filesystem root directory (where you mounted it).
+// return a list of entries of a given directory path
+`slist* slist_make_from_dir_path(path)`
+  - go through the list of inodes in the path and concatenate them into an slist
+  - return the slist
+// print out the entries of a given directory (path)
+`void directory_list(path)`
+  - go through the list of inodes in the path
+  - print the slist
+
+// specifically for printing files in the root directory
+`void list_root()
+{
+  directory_list("/");
+}  
+`
+### Write to small files (under 4k).
+`file_write(path)`
+- update size...
+
+### Read from small files (under 4k).
+`file_read(path)`
+???
+
+### Delete files.
+`file_delete(path)`
+- decrement the reference count to the inode of the given path.
+- if the reference count is equal to zero, no one else links to this file and we free
+the data associated to the inode and mark it as "free" in our list of inodes.
+
+### Rename files.
+`file_rename(path, new name)`
+- in the directory entry of given path, change file name to the given name
+
+
+## Step 2
+### Create hard links - multiple names for the same file blocks.
+`link_make(inode real, string link)`
+- get the inode number from the "real" file
+- create a new directory entry with the
+
+### Read and write from files larger than one block.
+- For example, you should be able to support fifty 1k files or five 100k files.
+- uses the direct/indirect link system from the ext format.
+
+### Create directories and nested directories. Directory depth should only be limited by space.
+`dir_make(path)`
+- Handled by the ext format and inode types
+
+### Remove directories.
+`dir_remove(path)`
+- check to make sure that the directory is empty
+- if its not, return an error or delete all files inside?
+- if it is, remove it like a normal file...
+
+### Support metadata (permissions and timestamps) for files and directories.
+- handled by the inode data structure
+
+## Givens, General Design
+### 1 MB "disk"
+
+- Use memory mapped IO
+- Create a file
+- Mmap 1MB worth of space to it, save head pointer (1024^2)
+- equivalent to 256 pages (4096)
+- All inodes will point to the head + (some offset)
+`typedef struct disk {
+
+  inode* root;                    // inode of the root directory
+
+  byte* inode_bitmap;             // size = 1/8 * (numInodes)
+
+  byte* data_pages_bitmap;        // size = 1/8 * (numDataPages)
+
+  inode* inode_list;              // all of the inodes in this fs, size NUM_INODES
+
+  page* data;                     // the pages of actual data in this fs, 8
+
+} disk;`
+*Decided NOT to use the BITMAPS in the meta data section* ???? didnt we?
+
+
+### Inode
+This is the object that points to a specific location in memory that the data
+for our file is stored. It has its own id (index)
+`typedef struct inode {
+
+    dev_t rdev;                     // The device this inode is being stored on
+
+    int node_id;                    // node id
+
+    int blocks_used;                // the number of blocks used, calculated
+    based on size
+
+    size_t size;                    // size of the data pointed to by the inode
+    in bytes
+
+    int refs;                       // number of references to this inode
+
+    uid_t user;                     // who owns the file
+
+    inodeType type;                 // what type of inode (type)
+
+    mode_t permissions;             // the file permissions
+
+    metaTimes meta_time;            // creation/access/modification times
+
+    int direct_id[MAX_DIRECT];      // pointers to 10 pages in memory
+
+    int indirect_id;        // pointer to an page in memory containing direct ids
+
+    int double_indirect_id; // pointer to page in memory containing indirect ids
+
+} inode;
+`
+`typedef struct metaTimes {
+
+  struct timespec created;
+
+  struct timespec lastAccess;
+
+  struct timespec lastModified;
+
+} metaTimes;
+`
+`
+typedef enum {NUFS_NONE, NUFS_FILE, NUFS_DIR} inodeType;
+`
+
+### Directory Entries
+Entry into an inode structure....
+`typedef struct direntry {
+
+    char   name[NUFS_MAX_NAME_LENGTH]; // the name of this directory entry
+
+    inode* node;                       // the node for the directory entry
+
+} direntry;
+`
+### Directory
+In a sense, our superblock structure.
+
+Inent: Map{Names, Inode#}
+Laziest implementation
+- Text file
+- one filesystem object per line
+- seperate name from inode # with "/"
+
+Example:
+hello.txt/7
+hello2.txt/22
+subdir/49
+
+Convert this to a slist for usability....
+
+Directories: Stores references to other files/directories, has meta-data:
+  - Name        (dirent->name)
+  - num entries (dirent->node->refs??)
+  - created time, modified time, access time (stored in corresponding inode)
+  - permissions (stored in corresponding inode)
+  - corresponding inode (dirent->node)
+  - Size Distribution (dirent->record\_length?)
+special cases:
+  - contains file pointing to itself
+  - cotains file pointing to its parent
+`typedef struct directory {
+
+    char name[NUFS_MAX_NAME_LENGTH];  // the name of this directory
+
+                                      // time meta data: directory->node->meta_time
+
+                                      // permissions: directory->node->permissions
+
+    int numEntries;                   // the number of entries in this directory
+
+    direntry* entries;                // point to the first dirent of the folder
+
+} directory;
+`
+
+Linux 0.96c superblock structure:
+/linux/include/linux/ext\_fs.h
+
+## Class Notes - Tuesday, Nov 21, 2017
+Mapping files to blocks
+- Every file is composed of >= 1 blocks
+- Mapping files to blocks
+  - list of files (issues)
+  - store blocks contiguously w/ (start, end) pairs
+- Directories
+  - Files that store references to other files/directories
+  - special cases:
+    - contains file pointing to itself
+    - cotains file pointing to its parent
+  - have meta data
+    - Name, num entries
+    - created time, modified time, access time
+    - permissions (read/write/execute)
+    - MUST store (file name, corresponding inode)
+Size Distribution
+- FAT uses linked list for all files
+- simple and uniform mechanism
+- not optimized for short or long files
+Studies show 2kb was the most common file size (back when EXT was written)
+
+EXT:
+Super block
+- size and loc of bitmaps
+- number and loc of inodes
+- number and loc of data blocks
+- index of root inodes
+Bitmap of Free & used data blocks
+Table of inodes
+- Each inode is a file/directory
+- stores all meta-data and lists of associated data blocks
+
+## Code Notes - Friday, Nov 17, 2017
+- nufs.c - the "main" program of the challenge assignment
+  - calls storage init
+  - calls nufs init, contains the operations we're supposed to be implementing
+    - accesss: bool if user has access to given path
+    - getattr: called under 1 circ. 1) user call "stat", 2) every single time you
+    try to do anything.... **MAKE SURE THIS WORKS**
+    - readdir: list whats in a directory
+    - mkdir: make a directory
+    - unlink: don't call this on a directory. removes a hardlink from a file
+    - rmdir: fails if stuff in directory
+    - chmod: changes permissions
+    - truncate: changes the lenght of a file
+    - open: doesn't do anything in fuse? check if file exists, if doens't, give error
+    - read/write: self explanitory
+    - utimens: adjust time stamp of file (in the metadata)
+  - pass args to fuse main
+  - Error codes:
+    - return any negative number
+    - used standard errno: -> include <errorno.h>
+    - for FUSE, return negative errorcode
+    - special: EEXIST -> if you try to make a new file and specify file must be
+    a new file..
+  - Implement the callback functions stuff in nufs.c
+- storage.c
+  - not intended to be kept -> just a nudge to have all the file system code in
+    a seperate file. Should re-write
+
+fuse-  "user space file system". Interface that allows you to run user space file
+system. creates a folder an mounts into that folder. the running program will
+show all of the calls being done inside the directory (useful for debugging)
+
+"mount" cmd shows the different mounts that exist, should be able to see the fuse one
+"make mount"
+need two open terminal windows. One to "run" file system. one to do anything with
+that file system
+
+### Hints
+- pages.c: 100% good ideas
+  - represent
+
+
+### Misc. Ideas / Notes
+Function from Linux 0.96c EXT filesystem to count # of used pages:
+`static unsigned long count_used(struct buffer_head *map[], unsigned numblocks,
+	unsigned numbits)
+{
+	unsigned i, j, end, sum = 0;
+	struct buffer_head *bh;
+
+	for (i=0; (i<numblocks) && numbits; i++) {
+		if (!(bh=map[i]))
+			return(0);
+		if (numbits >= (8*BLOCK_SIZE)) {
+			end = BLOCK_SIZE;
+			numbits -= 8*BLOCK_SIZE;
+		} else {
+			int tmp;
+			end = numbits >> 3;
+			numbits &= 0x7;
+			tmp = bh->b_data[end] & ((1<<numbits)-1);
+			sum += nibblemap[tmp&0xf] + nibblemap[(tmp>>4)&0xf];
+			numbits = 0;
+		}  
+		for (j=0; j<end; j++)
+			sum += nibblemap[bh->b_data[j] & 0xf]
+				+ nibblemap[(bh->b_data[j]>>4)&0xf];
+	}
+	return(sum);
+}
+`
+
+Function from Linux 0.96c EXT filesystem to read a directory:
+`static int ext_readdir(struct inode * inode, struct file * filp,
+	struct dirent * dirent, int count)
+{
+	unsigned int block,offset,i;
+	char c;
+	struct buffer_head * bh;
+	struct ext_dir_entry * de;
+
+	if (!inode || !S_ISDIR(inode->i_mode))
+		return -EBADF;
+/*	if (filp->f_pos & (sizeof (struct ext_dir_entry) - 1))
+		return -EBADF; */
+	while (filp->f_pos < inode->i_size) {
+		offset = filp->f_pos & 1023;
+		block = ext_bmap(inode,(filp->f_pos)>>BLOCK_SIZE_BITS);
+		if (!block || !(bh = bread(inode->i_dev,block))) {
+			filp->f_pos += 1024-offset;
+			continue;
+		}
+		de = (struct ext_dir_entry *) (offset + bh->b_data);
+		while (offset < 1024 && filp->f_pos < inode->i_size) {
+			offset += de->rec_len;
+			filp->f_pos += de->rec_len;
+			if (de->inode) {
+				for (i = 0; i < de->name_len; i++)
+					if (c = de->name[i])
+						put_fs_byte(c,i+dirent->d_name);
+					else
+						break;
+				if (i) {
+					put_fs_long(de->inode,&dirent->d_ino);
+					put_fs_byte(0,i+dirent->d_name);
+					put_fs_word(i,&dirent->d_reclen);
+					brelse(bh);
+					return i;
+				}
+			}
+/*			de++; */
+			de = (struct ext_dir_entry *) ((char *) de + de->rec_len);
+		}
+		brelse(bh);
+	}
+	return 0;
+}`
+
+
+Functions from Linx 0.96c to read/write a file:
+`static int ext_file_read(struct inode * inode, struct file * filp, char * buf, int count)
+{
+	int read,left,chars,nr;
+	int block, blocks, offset;
+	struct buffer_head ** bhb, ** bhe;
+	struct buffer_head * buflist[NBUF];
+
+	if (!inode) {
+		printk("ext_file_read: inode = NULL\n");
+		return -EINVAL;
+	}
+	if (!(S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode))) {
+		printk("ext_file_read: mode = %07o\n",inode->i_mode);
+		return -EINVAL;
+	}
+	if (filp->f_pos > inode->i_size)
+		left = 0;
+	else
+		left = inode->i_size - filp->f_pos;
+	if (left > count)
+		left = count;
+	if (left <= 0)
+		return 0;
+	read = 0;
+	block = filp->f_pos >> BLOCK_SIZE_BITS;
+	offset = filp->f_pos & (BLOCK_SIZE-1);
+	blocks = (left + offset + BLOCK_SIZE - 1) / BLOCK_SIZE;
+	bhb = bhe = buflist;
+	do {
+		if (blocks) {
+			--blocks;
+			if (nr = ext_bmap(inode,block++)) {
+				*bhb = getblk(inode->i_dev,nr);
+				if (!(*bhb)->b_uptodate)
+					ll_rw_block(READ,*bhb);
+			} else
+				*bhb = NULL;
+
+			if (++bhb == &buflist[NBUF])
+				bhb = buflist;
+
+			if (bhb != bhe)
+				continue;
+		}
+		if (*bhe) {
+			wait_on_buffer(*bhe);
+			if (!(*bhe)->b_uptodate) {
+				do {
+					brelse(*bhe);
+					if (++bhe == &buflist[NBUF])
+						bhe = buflist;
+				} while (bhe != bhb);
+				break;
+			}
+		}
+
+		if (left < BLOCK_SIZE - offset)
+			chars = left;
+		else
+			chars = BLOCK_SIZE - offset;
+		filp->f_pos += chars;
+		left -= chars;
+		read += chars;
+		if (*bhe) {
+			memcpy_tofs(buf,offset+(*bhe)->b_data,chars);
+			brelse(*bhe);
+			buf += chars;
+		} else {
+			while (chars-->0)
+				put_fs_byte(0,buf++);
+		}
+		offset = 0;
+		if (++bhe == &buflist[NBUF])
+			bhe = buflist;
+	} while (left > 0);
+	if (!read)
+		return -EIO;
+	inode->i_atime = CURRENT_TIME;
+	inode->i_dirt = 1;
+	return read;
+}`
+
+`static int ext_file_write(struct inode * inode, struct file * filp, char * buf, int count)
+{
+	off_t pos;
+	int written,block,c;
+	struct buffer_head * bh;
+	char * p;
+
+	if (!inode) {
+		printk("ext_file_write: inode = NULL\n");
+		return -EINVAL;
+	}
+	if (!S_ISREG(inode->i_mode)) {
+		printk("ext_file_write: mode = %07o\n",inode->i_mode);
+		return -EINVAL;
+	}
+/*
+ * ok, append may not work when many processes are writing at the same time
+ * but so what. That way leads to madness anyway.
+ */
+	if (filp->f_flags & O_APPEND)
+		pos = inode->i_size;
+	else
+		pos = filp->f_pos;
+	written = 0;
+	while (written<count) {
+		if (!(block = ext_create_block(inode,pos/BLOCK_SIZE))) {
+			if (!written)
+				written = -ENOSPC;
+			break;
+		}
+		c = BLOCK_SIZE - (pos % BLOCK_SIZE);
+		if (c > count-written)
+			c = count-written;
+		if (c == BLOCK_SIZE)
+			bh = getblk(inode->i_dev, block);
+		else
+			bh = bread(inode->i_dev,block);
+		if (!bh) {
+			if (!written)
+				written = -EIO;
+			break;
+		}
+		p = (pos % BLOCK_SIZE) + bh->b_data;
+		pos += c;
+		if (pos > inode->i_size) {
+			inode->i_size = pos;
+			inode->i_dirt = 1;
+		}
+		written += c;
+		memcpy_fromfs(p,buf,c);
+		buf += c;
+		bh->b_uptodate = 1;
+		bh->b_dirt = 1;
+		brelse(bh);
+	}
+	inode->i_mtime = CURRENT_TIME;
+	inode->i_ctime = CURRENT_TIME;
+	filp->f_pos = pos;
+	inode->i_dirt = 1;
+	return written;
+}`
+
+Name related functions from Linux EXT (useful for finding things given path):
+`/*
+ *	ext_find_entry()
+ *
+ * finds an entry in the specified directory with the wanted name. It
+ * returns the cache buffer in which the entry was found, and the entry
+ * itself (as a parameter - res_dir). It does NOT read the inode of the
+ * entry - you'll have to do that yourself if you want to.
+ *
+ * addition for the ext file system : this function returns the previous
+ * and next directory entries in the parameters prev_dir and next_dir
+ */
+static struct buffer_head * ext_find_entry(struct inode * dir,
+	const char * name, int namelen, struct ext_dir_entry ** res_dir,
+	struct ext_dir_entry ** prev_dir, struct ext_dir_entry ** next_dir)
+{
+/*	int entries; */
+	int block /* ,i */;
+	long offset;
+	struct buffer_head * bh;
+	struct ext_dir_entry * de;
+
+	*res_dir = NULL;
+	if (!dir)
+		return NULL;
+#ifdef NO_TRUNCATE
+	if (namelen > EXT_NAME_LEN)
+		return NULL;
+#else
+	if (namelen > EXT_NAME_LEN)
+		namelen = EXT_NAME_LEN;
+#endif
+/*	entries = dir->i_size / (sizeof (struct ext_dir_entry)); */
+	if (!(block = dir->i_data[0]))
+		return NULL;
+	if (!(bh = bread(dir->i_dev,block)))
+		return NULL;
+	if (prev_dir)
+		*prev_dir = NULL;
+	if (next_dir)
+		*next_dir = NULL;
+/*	i = 0; */
+	offset = 0;
+	de = (struct ext_dir_entry *) bh->b_data;
+	while (offset < dir->i_size) {
+		if ((char *)de >= BLOCK_SIZE+bh->b_data) {
+			brelse(bh);
+			bh = NULL;
+			if (!(block = ext_bmap(dir,offset>>BLOCK_SIZE_BITS)) ||
+			    !(bh = bread(dir->i_dev,block))) {
+/*				i += EXT_DIR_ENTRIES_PER_BLOCK; */
+/* 				offset += BLOCK_SIZE; */
+				continue;
+			}
+			de = (struct ext_dir_entry *) bh->b_data;
+			if (prev_dir)
+				*prev_dir = NULL;
+		}
+		if (ext_match(namelen,name,de)) {
+			*res_dir = de;
+			if (next_dir)
+				if (offset + de->rec_len < dir->i_size)
+					*next_dir = (struct ext_dir_entry *)
+						((char *) de + de->rec_len);
+				else
+					*next_dir = NULL;
+			return bh;
+		}
+		offset += de->rec_len;
+		if (prev_dir)
+			*prev_dir = de;
+		de = (struct ext_dir_entry *) ((char *) de + de->rec_len);
+/*		i++; */
+	}
+	brelse(bh);
+	return NULL;
+}
+
+int ext_lookup(struct inode * dir,const char * name, int len,
+	struct inode ** result)
+{
+	int ino;
+	struct ext_dir_entry * de;
+	struct buffer_head * bh;
+
+	*result = NULL;
+	if (!dir)
+		return -ENOENT;
+	if (!S_ISDIR(dir->i_mode)) {
+		iput(dir);
+		return -ENOENT;
+	}
+	if (!(bh = ext_find_entry(dir,name,len,&de,NULL,NULL))) {
+		iput(dir);
+		return -ENOENT;
+	}
+	ino = de->inode;
+	brelse(bh);
+	if (!(*result = iget(dir->i_dev,ino))) {
+		iput(dir);
+		return -EACCES;
+	}
+	iput(dir);
+	return 0;
+}
+
+/*
+ *	ext_add_entry()
+ *
+ * adds a file entry to the specified directory, using the same
+ * semantics as ext_find_entry(). It returns NULL if it failed.
+ *
+ * NOTE!! The inode part of 'de' is left at 0 - which means you
+ * may not sleep between calling this and putting something into
+ * the entry, as someone else might have used it while you slept.
+ */
+static struct buffer_head * ext_add_entry(struct inode * dir,
+	const char * name, int namelen, struct ext_dir_entry ** res_dir)
+{
+	int block,i;
+	long offset;
+	unsigned short rec_len;
+	struct buffer_head * bh;
+	struct ext_dir_entry * de, * de1;
+
+	*res_dir = NULL;
+	if (!dir)
+		return NULL;
+#ifdef NO_TRUNCATE
+	if (namelen > EXT_NAME_LEN)
+		return NULL;
+#else
+	if (namelen > EXT_NAME_LEN)
+		namelen = EXT_NAME_LEN;
+#endif
+	if (!namelen)
+		return NULL;
+	if (!(block = dir->i_data[0]))
+		return NULL;
+	if (!(bh = bread(dir->i_dev,block)))
+		return NULL;
+	rec_len = ((8 + namelen + EXT_DIR_PAD - 1) / EXT_DIR_PAD) * EXT_DIR_PAD;
+/*	i = 0; */
+	offset = 0;
+	de = (struct ext_dir_entry *) bh->b_data;
+	while (1) {
+		if ((char *)de >= BLOCK_SIZE+bh->b_data && offset < dir->i_size) {
+#ifdef EXTFS_DEBUG
+printk ("ext_add_entry: skipping to next block\n");
+#endif
+			brelse(bh);
+			bh = NULL;
+			block = ext_create_block(dir,offset>>BLOCK_SIZE_BITS);
+			if (!block)
+				return NULL;
+			if (!(bh = bread(dir->i_dev,block))) {
+/*				i += EXT_DIR_ENTRIES_PER_BLOCK; */
+				offset += BLOCK_SIZE;
+				continue;
+			}
+			de = (struct ext_dir_entry *) bh->b_data;
+		}
+		if (offset >= dir->i_size) {
+			/* Check that the directory entry fits in the block */
+			if (offset % BLOCK_SIZE == 0
+			    || (BLOCK_SIZE - (offset % BLOCK_SIZE)) < rec_len) {
+				if ((offset % BLOCK_SIZE) != 0) {
+					/* If the entry does not fit in the
+					   block, the remainder of the block
+					   becomes an unused entry */
+					de->inode = 0;
+					de->rec_len = BLOCK_SIZE
+						- (offset & (BLOCK_SIZE - 1));
+					de->name_len = 0;
+					offset += de->rec_len;
+					dir->i_size += de->rec_len;
+					dir->i_dirt = 1;
+					dir->i_ctime = CURRENT_TIME;
+					bh->b_dirt = 1;
+				}
+				brelse (bh);
+				bh = NULL;
+				block = ext_create_block (dir,offset>>BLOCK_SIZE_BITS);
+#ifdef EXTFS_DEBUG
+printk ("ext_add_entry : creating next block\n");
+#endif
+				if (!block)
+					return NULL;
+				if (!(bh = bread(dir->i_dev,block)))
+					return NULL; /* Other thing to do ??? */
+				de = (struct ext_dir_entry *) bh->b_data;
+			}
+			/* Allocate the entry */
+			de->inode=0;
+			de->rec_len = rec_len;
+/*			dir->i_size = (i+1)*sizeof(struct ext_dir_entry); */
+			dir->i_size += de->rec_len;
+			dir->i_dirt = 1;
+			dir->i_ctime = CURRENT_TIME;
+		}
+		if (!de->inode && de->rec_len >= rec_len) {
+			if (de->rec_len > rec_len
+			    && de->rec_len - rec_len >= EXT_DIR_MIN_SIZE) {
+				/* The found entry is too big : it is split
+				   into 2 ones :
+				   - the 1st one will be used to hold the name,
+				   - the 2nd one is unused */
+				de1 = (struct ext_dir_entry *) ((char *) de + rec_len);
+				de1->inode = 0;
+				de1->rec_len = de->rec_len - rec_len;
+				de1->name_len = 0;
+				de->rec_len = rec_len;
+			}
+			dir->i_mtime = CURRENT_TIME;
+			de->name_len = namelen;
+			for (i=0; i < namelen ; i++)
+				de->name[i]=/*(i<namelen)?*/get_fs_byte(name+i)/*:0*/;
+			bh->b_dirt = 1;
+			*res_dir = de;
+			return bh;
+		}
+		offset += de->rec_len;
+		de = (struct ext_dir_entry *) ((char *) de + de->rec_len);
+	}
+	brelse(bh);
+	return NULL;
+}
+
+int ext_create(struct inode * dir,const char * name, int len, int mode,
+	struct inode ** result)
+{
+	struct inode * inode;
+	struct buffer_head * bh;
+	struct ext_dir_entry * de;
+
+	*result = NULL;
+	if (!dir)
+		return -ENOENT;
+	inode = ext_new_inode(dir->i_dev);
+	if (!inode) {
+		iput(dir);
+		return -ENOSPC;
+	}
+	inode->i_op = &ext_file_inode_operations;
+	inode->i_mode = mode;
+	inode->i_dirt = 1;
+	bh = ext_add_entry(dir,name,len,&de);
+	if (!bh) {
+		inode->i_nlink--;
+		inode->i_dirt = 1;
+		iput(inode);
+		iput(dir);
+		return -ENOSPC;
+	}
+	de->inode = inode->i_ino;
+	bh->b_dirt = 1;
+	brelse(bh);
+	iput(dir);
+	*result = inode;
+	return 0;
+}
+
+int ext_mknod(struct inode * dir, const char * name, int len, int mode, int rdev)
+{
+	struct inode * inode;
+	struct buffer_head * bh;
+	struct ext_dir_entry * de;
+
+	if (!dir)
+		return -ENOENT;
+	bh = ext_find_entry(dir,name,len,&de,NULL,NULL);
+	if (bh) {
+		brelse(bh);
+		iput(dir);
+		return -EEXIST;
+	}
+	inode = ext_new_inode(dir->i_dev);
+	if (!inode) {
+		iput(dir);
+		return -ENOSPC;
+	}
+	inode->i_uid = current->euid;
+	inode->i_mode = mode;
+	inode->i_op = NULL;
+	if (S_ISREG(inode->i_mode))
+		inode->i_op = &ext_file_inode_operations;
+	else if (S_ISDIR(inode->i_mode))
+		inode->i_op = &ext_dir_inode_operations;
+	else if (S_ISLNK(inode->i_mode))
+		inode->i_op = &ext_symlink_inode_operations;
+	else if (S_ISCHR(inode->i_mode))
+		inode->i_op = &ext_chrdev_inode_operations;
+	else if (S_ISBLK(inode->i_mode))
+		inode->i_op = &ext_blkdev_inode_operations;
+	else if (S_ISFIFO(inode->i_mode)) {
+		inode->i_op = &ext_fifo_inode_operations;
+		inode->i_size = 0;
+		inode->i_pipe = 1;
+		PIPE_HEAD(*inode) = PIPE_TAIL(*inode) = 0;
+		PIPE_READERS(*inode) = PIPE_WRITERS(*inode) = 0;
+	}
+	if (S_ISBLK(mode) || S_ISCHR(mode))
+		inode->i_rdev = rdev;
+	inode->i_mtime = inode->i_atime = CURRENT_TIME;
+	inode->i_dirt = 1;
+	bh = ext_add_entry(dir,name,len,&de);
+	if (!bh) {
+		inode->i_nlink--;
+		inode->i_dirt = 1;
+		iput(inode);
+		iput(dir);
+		return -ENOSPC;
+	}
+	de->inode = inode->i_ino;
+	bh->b_dirt = 1;
+	brelse(bh);
+	iput(dir);
+	iput(inode);
+	return 0;
+}
+
+int ext_mkdir(struct inode * dir, const char * name, int len, int mode)
+{
+	struct inode * inode;
+	struct buffer_head * bh, *dir_block;
+	struct ext_dir_entry * de;
+
+	bh = ext_find_entry(dir,name,len,&de,NULL,NULL);
+	if (bh) {
+		brelse(bh);
+		iput(dir);
+		return -EEXIST;
+	}
+	inode = ext_new_inode(dir->i_dev);
+	if (!inode) {
+		iput(dir);
+		return -ENOSPC;
+	}
+	inode->i_op = &ext_dir_inode_operations;
+	inode->i_size = 2 * 16; /* Each entry is coded on 16 bytes for "." and ".."
+					- 4 bytes for the inode number,
+					- 2 bytes for the record length
+					- 2 bytes for the name length
+					- 8 bytes for the name */
+	inode->i_mtime = inode->i_atime = CURRENT_TIME;
+	if (!(inode->i_data[0] = ext_new_block(inode->i_dev))) {
+		iput(dir);
+		inode->i_nlink--;
+		inode->i_dirt = 1;
+		iput(inode);
+		return -ENOSPC;
+	}
+	inode->i_dirt = 1;
+	if (!(dir_block = bread(inode->i_dev,inode->i_data[0]))) {
+		iput(dir);
+		inode->i_nlink--;
+		inode->i_dirt = 1;
+		iput(inode);
+		return -EIO;
+	}
+	de = (struct ext_dir_entry *) dir_block->b_data;
+	de->inode=inode->i_ino;
+	de->rec_len=16;
+	de->name_len=1;
+	strcpy(de->name,".");
+/*	de++; */
+	de = (struct ext_dir_entry *) ((char *) de + de->rec_len);
+	de->inode = dir->i_ino;
+	de->rec_len=16;
+	de->name_len=2;
+	strcpy(de->name,"..");
+	inode->i_nlink = 2;
+	dir_block->b_dirt = 1;
+	brelse(dir_block);
+	inode->i_mode = I_DIRECTORY | (mode & 0777 & ~current->umask);
+	inode->i_dirt = 1;
+	bh = ext_add_entry(dir,name,len,&de);
+	if (!bh) {
+		iput(dir);
+		inode->i_nlink=0;
+		iput(inode);
+		return -ENOSPC;
+	}
+	de->inode = inode->i_ino;
+	bh->b_dirt = 1;
+	dir->i_nlink++;
+	dir->i_dirt = 1;
+	iput(dir);
+	iput(inode);
+	brelse(bh);
+	return 0;
+}
+
+/*
+ * routine to check that the specified directory is empty (for rmdir)
+ */
+static int empty_dir(struct inode * inode)
+{
+	int /* nr, */ block;
+/*	int len; */
+	unsigned long offset;
+	struct buffer_head * bh;
+	struct ext_dir_entry * de, * de1;
+
+/*	len = inode->i_size / sizeof (struct ext_dir_entry); */
+	if (inode->i_size < 2 * 12 || !inode->i_data[0] ||
+	    !(bh=bread(inode->i_dev,inode->i_data[0]))) {
+	    	printk("warning - bad directory on dev %04x\n",inode->i_dev);
+		return 0;
+	}
+	de = (struct ext_dir_entry *) bh->b_data;
+	de1 = (struct ext_dir_entry *) ((char *) de + de->rec_len);
+	if (de->inode != inode->i_ino || !de1->inode ||
+	    strcmp(".",de->name) || strcmp("..",de1->name)) {
+	    	printk("warning - bad directory on dev %04x\n",inode->i_dev);
+		return 0;
+	}
+/*	nr = 2; */
+	offset = de->rec_len + de1->rec_len;
+	de = (struct ext_dir_entry *) ((char *) de1 + de1->rec_len);
+	while (offset < inode->i_size ) {
+		if ((void *) de >= (void *) (bh->b_data+BLOCK_SIZE)) {
+			brelse(bh);
+			block = ext_bmap(inode, offset >> BLOCK_SIZE_BITS);
+			if (!block) {
+				offset += BLOCK_SIZE;
+				continue;
+			}
+			if (!(bh=bread(inode->i_dev,block)))
+				return 0;
+			de = (struct ext_dir_entry *) bh->b_data;
+		}
+		if (de->inode) {
+			brelse(bh);
+			return 0;
+		}
+		offset += de->rec_len;
+		de = (struct ext_dir_entry *) ((char *) de + de->rec_len);
+	}
+	brelse(bh);
+	return 1;
+}
+
+static inline void ext_merge_entries (struct ext_dir_entry * de,
+	struct ext_dir_entry * pde, struct ext_dir_entry * nde)
+{
+	if (! nde->inode)
+		de->rec_len += nde->rec_len;
+	if (! pde->inode)
+		pde->rec_len += de->rec_len;
+}
+
+int ext_rmdir(struct inode * dir, const char * name, int len)
+{
+	int retval;
+	struct inode * inode;
+	struct buffer_head * bh;
+	struct ext_dir_entry * de, * pde, * nde;
+
+	inode = NULL;
+	bh = ext_find_entry(dir,name,len,&de,&pde,&nde);
+	retval = -ENOENT;
+	if (!bh)
+		goto end_rmdir;
+	retval = -EPERM;
+	if (!(inode = iget(dir->i_dev, de->inode)))
+		goto end_rmdir;
+	if ((dir->i_mode & S_ISVTX) && current->euid &&
+	   inode->i_uid != current->euid)
+		goto end_rmdir;
+	if (inode->i_dev != dir->i_dev)
+		goto end_rmdir;
+	if (inode == dir)	/* we may not delete ".", but "../dir" is ok */
+		goto end_rmdir;
+	if (!S_ISDIR(inode->i_mode)) {
+		retval = -ENOTDIR;
+		goto end_rmdir;
+	}
+	if (!empty_dir(inode)) {
+		retval = -ENOTEMPTY;
+		goto end_rmdir;
+	}
+	if (inode->i_count > 1) {
+		retval = -EBUSY;
+		goto end_rmdir;
+	}
+	if (inode->i_nlink != 2)
+		printk("empty directory has nlink!=2 (%d)\n",inode->i_nlink);
+	de->inode = 0;
+	de->name_len = 0;
+	ext_merge_entries (de, pde, nde);
+	bh->b_dirt = 1;
+	inode->i_nlink=0;
+	inode->i_dirt=1;
+	dir->i_nlink--;
+	dir->i_ctime = dir->i_mtime = CURRENT_TIME;
+	dir->i_dirt=1;
+	retval = 0;
+end_rmdir:
+	iput(dir);
+	iput(inode);
+	brelse(bh);
+	return retval;
+}
+
+int ext_unlink(struct inode * dir, const char * name, int len)
+{
+	int retval;
+	struct inode * inode;
+	struct buffer_head * bh;
+	struct ext_dir_entry * de, * pde, * nde;
+
+	retval = -ENOENT;
+	inode = NULL;
+	bh = ext_find_entry(dir,name,len,&de,&pde,&nde);
+	if (!bh)
+		goto end_unlink;
+	if (!(inode = iget(dir->i_dev, de->inode)))
+		goto end_unlink;
+	retval = -EPERM;
+	if ((dir->i_mode & S_ISVTX) && !suser() &&
+	    current->euid != inode->i_uid &&
+	    current->euid != dir->i_uid)
+		goto end_unlink;
+	if (S_ISDIR(inode->i_mode))
+		goto end_unlink;
+	if (!inode->i_nlink) {
+		printk("Deleting nonexistent file (%04x:%d), %d\n",
+			inode->i_dev,inode->i_ino,inode->i_nlink);
+		inode->i_nlink=1;
+	}
+	de->inode = 0;
+	de->name_len = 0;
+	ext_merge_entries (de, pde, nde);
+	bh->b_dirt = 1;
+	inode->i_nlink--;
+	inode->i_dirt = 1;
+	inode->i_ctime = CURRENT_TIME;
+	retval = 0;
+end_unlink:
+	brelse(bh);
+	iput(inode);
+	iput(dir);
+	return retval;
+}
+
+int ext_symlink(struct inode * dir, const char * name, int len, const char * symname)
+{
+	struct ext_dir_entry * de;
+	struct inode * inode = NULL;
+	struct buffer_head * bh = NULL, * name_block = NULL;
+	int i;
+	char c;
+
+	if (!(inode = ext_new_inode(dir->i_dev))) {
+		iput(dir);
+		return -ENOSPC;
+	}
+	inode->i_mode = S_IFLNK | 0777;
+	inode->i_op = &ext_symlink_inode_operations;
+	if (!(inode->i_data[0] = ext_new_block(inode->i_dev))) {
+		iput(dir);
+		inode->i_nlink--;
+		inode->i_dirt = 1;
+		iput(inode);
+		return -ENOSPC;
+	}
+	inode->i_dirt = 1;
+	if (!(name_block = bread(inode->i_dev,inode->i_data[0]))) {
+		iput(dir);
+		inode->i_nlink--;
+		inode->i_dirt = 1;
+		iput(inode);
+		return -EIO;
+	}
+	i = 0;
+	while (i < 1023 && (c=get_fs_byte(symname++)))
+		name_block->b_data[i++] = c;
+	name_block->b_data[i] = 0;
+	name_block->b_dirt = 1;
+	brelse(name_block);
+	inode->i_size = i;
+	inode->i_dirt = 1;
+	bh = ext_find_entry(dir,name,len,&de,NULL,NULL);
+	if (bh) {
+		inode->i_nlink--;
+		inode->i_dirt = 1;
+		iput(inode);
+		brelse(bh);
+		iput(dir);
+		return -EEXIST;
+	}
+	bh = ext_add_entry(dir,name,len,&de);
+	if (!bh) {
+		inode->i_nlink--;
+		inode->i_dirt = 1;
+		iput(inode);
+		iput(dir);
+		return -ENOSPC;
+	}
+	de->inode = inode->i_ino;
+	bh->b_dirt = 1;
+	brelse(bh);
+	iput(dir);
+	iput(inode);
+	return 0;
+}
+
+int ext_link(struct inode * oldinode, struct inode * dir, const char * name, int len)
+{
+	struct ext_dir_entry * de;
+	struct buffer_head * bh;
+
+	if (S_ISDIR(oldinode->i_mode)) {
+		iput(oldinode);
+		iput(dir);
+		return -EPERM;
+	}
+	bh = ext_find_entry(dir,name,len,&de,NULL,NULL);
+	if (bh) {
+		brelse(bh);
+		iput(dir);
+		iput(oldinode);
+		return -EEXIST;
+	}
+	bh = ext_add_entry(dir,name,len,&de);
+	if (!bh) {
+		iput(dir);
+		iput(oldinode);
+		return -ENOSPC;
+	}
+	de->inode = oldinode->i_ino;
+	bh->b_dirt = 1;
+	brelse(bh);
+	iput(dir);
+	oldinode->i_nlink++;
+	oldinode->i_ctime = CURRENT_TIME;
+	oldinode->i_dirt = 1;
+	iput(oldinode);
+	return 0;
+}
+
+static int subdir(struct inode * new, struct inode * old)
+{
+	unsigned short fs;
+	int ino;
+	int result;
+
+	__asm__("mov %%fs,%0":"=r" (fs));
+	__asm__("mov %0,%%fs"::"r" ((unsigned short) 0x10));
+	new->i_count++;
+	result = 0;
+	for (;;) {
+		if (new == old) {
+			result = 1;
+			break;
+		}
+		if (new->i_dev != old->i_dev)
+			break;
+		ino = new->i_ino;
+		if (ext_lookup(new,"..",2,&new))
+			break;
+		if (new->i_ino == ino)
+			break;
+	}
+	iput(new);
+	__asm__("mov %0,%%fs"::"r" (fs));
+	return result;
+}
+
+#define PARENT_INO(buffer) \
+((struct ext_dir_entry *) ((char *) buffer + \
+((struct ext_dir_entry *) buffer)->rec_len))->inode
+/* (((struct ext_dir_entry *) (buffer))[1].inode) */
+
+#define PARENT_NAME(buffer) \
+((struct ext_dir_entry *) ((char *) buffer + \
+((struct ext_dir_entry *) buffer)->rec_len))->name
+/* (((struct ext_dir_entry *) (buffer))[1].name) */
+
+/*
+ * rename uses retrying to avoid race-conditions: at least they should be minimal.
+ * it tries to allocate all the blocks, then sanity-checks, and if the sanity-
+ * checks fail, it tries to restart itself again. Very practical - no changes
+ * are done until we know everything works ok.. and then all the changes can be
+ * done in one fell swoop when we have claimed all the buffers needed.
+ *
+ * Anybody can rename anything with this: the permission checks are left to the
+ * higher-level routines.
+ */
+static int do_ext_rename(struct inode * old_dir, const char * old_name, int old_len,
+	struct inode * new_dir, const char * new_name, int new_len)
+{
+	struct inode * old_inode, * new_inode;
+	struct buffer_head * old_bh, * new_bh, * dir_bh;
+	struct ext_dir_entry * old_de, * new_de, * pde, * nde;
+	int retval;
+
+	goto start_up;
+try_again:
+	brelse(old_bh);
+	brelse(new_bh);
+	brelse(dir_bh);
+	iput(old_inode);
+	iput(new_inode);
+	current->counter = 0;
+	schedule();
+start_up:
+	old_inode = new_inode = NULL;
+	old_bh = new_bh = dir_bh = NULL;
+	old_bh = ext_find_entry(old_dir,old_name,old_len,&old_de,&pde,&nde);
+	retval = -ENOENT;
+	if (!old_bh)
+		goto end_rename;
+	old_inode = iget(old_dir->i_dev, old_de->inode);
+	if (!old_inode)
+		goto end_rename;
+	if ((old_dir->i_mode & S_ISVTX) &&
+	    current->euid != old_inode->i_uid &&
+	    current->euid != old_dir->i_uid && !suser())
+		goto end_rename;
+	new_bh = ext_find_entry(new_dir,new_name,new_len,&new_de,NULL,NULL);
+	if (new_bh) {
+		new_inode = iget(new_dir->i_dev, new_de->inode);
+		if (!new_inode) {
+			brelse(new_bh);
+			new_bh = NULL;
+		}
+	}
+	if (new_inode == old_inode) {
+		retval = 0;
+		goto end_rename;
+	}
+	if (S_ISDIR(old_inode->i_mode)) {
+		retval = -EEXIST;
+		if (new_bh)
+			goto end_rename;
+		retval = -EACCES;
+		if (!permission(old_inode, MAY_WRITE))
+			goto end_rename;
+		retval = -EINVAL;
+		if (subdir(new_dir, old_inode))
+			goto end_rename;
+		retval = -EIO;
+		if (!old_inode->i_data[0])
+			goto end_rename;
+		if (!(dir_bh = bread(old_inode->i_dev, old_inode->i_data[0])))
+			goto end_rename;
+		if (PARENT_INO(dir_bh->b_data) != old_dir->i_ino)
+			goto end_rename;
+	}
+	if (!new_bh)
+		new_bh = ext_add_entry(new_dir,new_name,new_len,&new_de);
+	retval = -ENOSPC;
+	if (!new_bh)
+		goto end_rename;
+/* sanity checking before doing the rename - avoid races */
+	if (new_inode && (new_de->inode != new_inode->i_ino))
+		goto try_again;
+	if (new_de->inode && !new_inode)
+		goto try_again;
+	if (old_de->inode != old_inode->i_ino)
+		goto try_again;
+/* ok, that's it */
+	old_de->inode = 0;
+	old_de->name_len = 0;
+	ext_merge_entries (old_de, pde, nde);
+	new_de->inode = old_inode->i_ino;
+	if (new_inode) {
+		new_inode->i_nlink--;
+		new_inode->i_dirt = 1;
+	}
+	old_bh->b_dirt = 1;
+	new_bh->b_dirt = 1;
+	if (dir_bh) {
+		PARENT_INO(dir_bh->b_data) = new_dir->i_ino;
+		dir_bh->b_dirt = 1;
+		old_dir->i_nlink--;
+		new_dir->i_nlink++;
+		old_dir->i_dirt = 1;
+		new_dir->i_dirt = 1;
+	}
+	retval = 0;
+end_rename:
+	brelse(dir_bh);
+	brelse(old_bh);
+	brelse(new_bh);
+	iput(old_inode);
+	iput(new_inode);
+	iput(old_dir);
+	iput(new_dir);
+	return retval;
+}
+
+/*
+ * Ok, rename also locks out other renames, as they can change the parent of
+ * a directory, and we don't want any races. Other races are checked for by
+ * "do_rename()", which restarts if there are inconsistencies.
+ *
+ * Note that there is no race between different filesystems: it's only within
+ * the same device that races occur: many renames can happen at once, as long
+ * as they are on different partitions.
+ */
+int ext_rename(struct inode * old_dir, const char * old_name, int old_len,
+	struct inode * new_dir, const char * new_name, int new_len)
+{
+	static struct task_struct * wait = NULL;
+	static int lock = 0;
+	int result;
+
+	while (lock)
+		sleep_on(&wait);
+	lock = 1;
+	result = do_ext_rename(old_dir, old_name, old_len,
+		new_dir, new_name, new_len);
+	lock = 0;
+	wake_up(&wait);
+	return result;
+}`

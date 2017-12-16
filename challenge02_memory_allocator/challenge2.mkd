@@ -1,0 +1,95 @@
+# Challenge 2
+
+Two programs:
+- They try to solve the Collataz Conjecture with brute force
+    - Use threads and inter-thread communication
+- You want to get three memory allocators working
+    - System allocator
+    - HW7 Allocator w/ mutex
+    - An optimized allocator that allows you to run the test programs faster
+    than the other two allocators
+
+## Two core optimizations for the fast allocator:
+- Sized-based binning
+- Something to reduce mutex / chache line contention
+    - Mutliple arenas?
+    - Per thread cahces?
+
+## TODO
+~ - Refactor hw07\_hmalloc code -> break back into a utils file? (Andrew) ~
+~ - Add a mutex around the free list to prevent data races in multithreaded ~
+conditions (Steven)
+~ - Implement realloc (Steven)
+  - Given a pointer and a size, reallocate a new chunk of memory to the given size
+    - Allocate a chunk of the given size
+    - Initialize to 0 -- hello andrew
+    - Copy old data into new data buffer
+    - Free old data buffer
+    - Return pointer to new data buffer ~
+- Write opt\_malloc from scratch... (start thinking on this...)
+
+## TODO Functions to Write
+1. arena\_find
+2. arena\_get
+3. arena\_add  
+4. free\_list\_add\_opt
+5. global\_add
+6. global\_get
+
+
+### Opt Malloc
+Givens: 
+- Needs to be thread safe.
+- Maximize speed
+- Main barriers 
+
+Plan:
+- Each thread has its own buffer space called an arena[1]
+- There exists a global arena that all threads can access the global areana
+- The global arena only contains full pages of data...
+
+- When a malloc is called, we do the following:
+    - If the malloc asks for a size greater than or equal to one page, mmap it 
+    and return the given memory block
+    - If the malloc asks for a size less than or equal to one page, return a node
+    of the smallest size greater than the requested size from our local free list.
+        - If a node of the requested size does not exist in our local free list, check 
+        if we have a node in any of the larger bin sizes. If we do, break that node up
+        into smaller nodes,and return one to the user. Put the remaining nodes into 
+        the proper bin sizes...
+        - If we don't have anything in our local arena that can be used, check the
+        global areana to seee if any suitable nodes exist there. If they do, move
+        it to our local arena and handle appropriately...
+        - If we can't find a suitable node in our local arena or the global arena
+        mmap a page for the smallest node size greater than the requested size and
+        return it to the user. Break leftover chunks up in to the largest possible
+        nodes and add them to our local arena.
+    - Note: the actual size we use for comparisions is the requested size + 8 bytes 
+    to store the block size...
+
+- When free is called...
+    - Access the size of the chunk...
+    - If the chunk is greater than 1 page, unmap it.
+    - If the chunk is less than 1 page, add it to the appropriate bin in the 
+    local arena. When its added, check to see if it can be coalesced into a larger
+    node. If it can, coalesce and attempt to add to the next level up. Repeat
+    this process until memory has been added somewhere in the arena.... 
+    - Moving data back to the global scope...
+        - Data should only be moved into the global scope as a full page in order to
+    reduce fragmentation... 
+        - Only do this when number of nodes in the local free list exceeds {NUMBER}
+        nodes... 
+
+- Realloc should be the same....
+
+[1] An arena is an array of free list with each list holding nodes of a given
+size. The arena holds a free list containing nodes of size 2^(n+4) up to 2^(12).
+
+
+
+
+
+
+
+
+
