@@ -5,8 +5,10 @@ Northeastern. The project folder naming conventions is as follows.
 
 `<semester taken>_<course number>_<project name>`
 
-Each project contains a README with explains more about the project and/or the 
-report written about the project. 
+Each project contains a README which explains more about the assignment and/or the 
+report written about the project. There is also an assignment (.mkd or .pdf) file 
+that has the assignment instructions. In some projects the REAME may just be the 
+assignment. 
 
 ## Table of Contents:
 | Project                           | Language | Description                              |
