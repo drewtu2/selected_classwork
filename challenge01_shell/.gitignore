@@ -1,0 +1,6 @@
+*.dSYM
+nush
+*.out
+debug/
+tmp/
+
